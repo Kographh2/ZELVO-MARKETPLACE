@@ -23,7 +23,7 @@ export default async function SellerDashboard({ searchParams }: { searchParams: 
   const [{ data: products }, { data: orders }, { data: freeInstalls }, { data: wds }] = await Promise.all([
     db.from('products').select('id,slug,title,price,install_count,rating_avg,rating_count,thumb_path,status,created_at').eq('seller_id', me.id).order('created_at', { ascending: false }),
     db.from('orders').select('id,status,gross_amount,fee_amount,seller_amount,paid_at,created_at,payment_type,product:products(title,slug),buyer:profiles!buyer_id(display_name,username)').eq('seller_id', me.id).order('created_at', { ascending: false }).limit(100),
-    db.from('installs').select('created_at,product:products!inner(title,slug,price,seller_id),user:profiles!user_id(display_name,username)').eq('product.seller_id', me.id).eq('product.price', 0).order('created_at', { ascending: false }).limit(100),
+    db.from('installs').select('created_at,product:products!inner(title,slug,price,seller_id),guest_name,user:profiles!user_id(display_name,username)').eq('product.seller_id', me.id).eq('product.price', 0).order('created_at', { ascending: false }).limit(100),
     db.from('withdrawals').select('code,amount,status,created_at,bank_name').eq('seller_id', me.id).order('created_at', { ascending: false }).limit(20),
   ]);
   const prods = products || [];
@@ -33,7 +33,7 @@ export default async function SellerDashboard({ searchParams }: { searchParams: 
 
   const tx = [
     ...(orders || []).map((o: any) => ({ at: o.paid_at || o.created_at, kind: 'paid', title: o.product?.title, who: o.buyer?.display_name, gross: o.gross_amount, fee: o.fee_amount, net: o.seller_amount, status: o.status, method: o.payment_type })),
-    ...(freeInstalls || []).map((i: any) => ({ at: i.created_at, kind: 'free', title: i.product?.title, who: i.user?.display_name, gross: 0, fee: 0, net: 0, status: 'install', method: null })),
+    ...(freeInstalls || []).map((i: any) => ({ at: i.created_at, kind: 'free', title: i.product?.title, who: i.user?.display_name || `${i.guest_name} (tamu)`, gross: 0, fee: 0, net: 0, status: 'install', method: null })),
   ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
 
   return (

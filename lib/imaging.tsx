@@ -27,26 +27,50 @@ async function render(el: any, width: number, height: number): Promise<Buffer> {
 export const qrDataUrl = (text: string, dark = '#0a1a44', width = 420) =>
   QRCode.toDataURL(text, { width, margin: 1, errorCorrectionLevel: 'M', color: { dark, light: '#ffffff' } });
 
+/** Logo ZELVO untuk gambar server (mark Z + teks). */
+function Brand({ size }: { size: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      <svg width={size} height={size} viewBox="0 0 64 64">
+        <path d="M17 12H55L50 23H12Z M12 41H50L47 52H9Z" fill="#e8edfb" />
+        <path d="M50 23H34L14 41H30Z" fill="#2d6bff" />
+      </svg>
+      <div style={{ display: 'flex', marginLeft: size * 0.3, fontFamily: 'Unbounded', fontSize: size * 0.8, color: '#e8edfb' }}>ZELVO</div>
+    </div>
+  );
+}
+
 const host = () => SITE.url.replace(/^https?:\/\//, '');
 
 /* ─────────── Watermark + thumbnail ─────────── */
-function watermarkSvg(size: number) {
-  const label = `Preview • file asli didapat setelah install di ${host()}`.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!));
-  const rows: string[] = [];
-  for (let i = 0; i < 16; i++) {
-    const y = -260 + i * 94;
-    const words: string[] = [];
-    for (let j = 0; j < 10; j++) words.push(`<text x="${-260 + j * 200 + (i % 2 ? 100 : 0)}" y="${y}">ZELVO</text>`);
-    rows.push(`<g fill="${i % 2 ? '#0a1a44' : '#ffffff'}" fill-opacity="${i % 2 ? 0.34 : 0.62}">${words.join('')}</g>`);
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><g font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700"><g transform="rotate(-28 ${size / 2} ${size / 2})">${rows.join('')}</g><text x="${size / 2}" y="${size - 18}" text-anchor="middle" font-size="22" fill="rgba(10,26,68,0.75)">${label}</text></g></svg>`;
+function Watermark({ size }: { size: number }) {
+  const rows = Array.from({ length: 12 });
+  const cols = Array.from({ length: 6 });
+  return (
+    <div style={{ display: 'flex', width: size, height: size, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', position: 'absolute', left: -size * 0.45, top: -size * 0.45, width: size * 2, height: size * 2, transform: 'rotate(-28deg)' }}>
+        {rows.map((_, i) => (
+          <div key={i} style={{ display: 'flex', marginBottom: 54, marginLeft: i % 2 ? 150 : 0 }}>
+            {cols.map((__, j) => (
+              <div key={j} style={{ display: 'flex', marginRight: 70, fontFamily: 'Unbounded', fontSize: 40, color: i % 2 ? 'rgba(10,26,68,0.34)' : 'rgba(255,255,255,0.62)' }}>
+                ZELVO
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', position: 'absolute', bottom: 18, left: 0, right: 0, justifyContent: 'center', fontFamily: 'Jakarta', fontWeight: 700, fontSize: 22, color: 'rgba(10,26,68,0.75)' }}>
+        Preview • file asli didapat setelah install di {host()}
+      </div>
+    </div>
+  );
 }
 
 /** PNG transparan asli → JPEG ber-watermark (tidak bisa dipakai ulang sebagai template). */
 export async function makeThumbnail(original: Buffer): Promise<Buffer> {
   const size = 900;
   const tpl = await sharp(original).resize(780, 780, { fit: 'inside' }).png().toBuffer();
-  const wm = await sharp(Buffer.from(watermarkSvg(size))).png().toBuffer();
+  const wm = await render(<Watermark size={size} />, size, size);
   return sharp({ create: { width: size, height: size, channels: 4, background: { r: 196, g: 202, b: 217, alpha: 1 } } })
     .composite([{ input: tpl, gravity: 'centre' }, { input: wm, top: 0, left: 0 }])
     .flatten({ background: '#c4cad9' })
@@ -71,7 +95,7 @@ export async function renderShareImage(p: {
       <div style={{ display: 'flex', position: 'absolute', top: 0, width: 360, height: H, background: '#0b1020', transform: 'skewX(-12deg)', right: -120 }} />
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', fontFamily: 'Unbounded', fontSize: 44, color: '#2d6bff' }}>ZELVO</div>
+          <Brand size={56} />
           <div style={{ display: 'flex', fontSize: 26, color: '#8a97bd' }}>Template striping {GAME.name}</div>
         </div>
         <div style={{ display: 'flex', marginTop: 40, alignSelf: 'center', border: '2px solid #2d6bff', padding: 14, background: '#c4cad9' }}>
@@ -106,22 +130,49 @@ export async function renderShareImage(p: {
 
 /* ─────────── Bukti saldo penarikan ─────────── */
 export async function renderBalanceProof(w: any, seller: any, verifyCode: string) {
-  const esc = (v: unknown) => String(v ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]!));
-  const cut = (v: unknown, n: number) => { const t = String(v ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-  const rows: [string, string, boolean][] = [
-    ['Toko', seller.store_name || seller.display_name, false],
-    ['Username', '@' + seller.username, false],
-    ['Saldo yang ditarik', rupiah(w.amount), true],
-    ['Bank', w.bank_name, false],
-    ['No. rekening', maskAccount(w.account_number, 4), false],
-    ['Atas nama', w.account_name, false],
-    ['Kode pengajuan', w.code, false],
-    ['Dibuat', dateID(w.created_at, true), false],
-  ];
-  const lines = rows.map(([k, v, big], i) => {
-    const y = 280 + i * 76;
-    return `<text x="70" y="${y}" font-size="28" fill="#8a97bd">${esc(k)}</text><text x="1010" y="${y}" text-anchor="end" font-size="${big ? 40 : 30}" font-weight="700" fill="${big ? '#6aa0ff' : '#e8edfb'}">${esc(cut(v, 42))}</text><line x1="70" y1="${y + 24}" x2="1010" y2="${y + 24}" stroke="#1d2a54" stroke-width="2"/>`;
-  }).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350"><rect width="1080" height="1350" fill="#05070d"/><g font-family="Arial, Helvetica, sans-serif"><g transform="translate(-160 440) rotate(-24)" opacity="0.07" fill="#2d6bff" font-size="90" font-weight="700">${[0, 1, 2, 3].map((i) => `<text x="${i % 2 ? 160 : 0}" y="${i * 120}">ZELVO ZELVO ZELVO ZELVO</text>`).join('')}</g><text x="70" y="120" font-size="48" font-weight="700" fill="#2d6bff">ZELVO</text><text x="1010" y="112" text-anchor="end" font-size="26" fill="#8a97bd">${esc(host())}</text><text x="70" y="215" font-size="40" font-weight="700" fill="#e8edfb">Bukti saldo penarikan</text>${lines}<rect x="70" y="960" width="940" height="150" fill="none" stroke="#2d6bff" stroke-width="2"/><text x="98" y="1005" font-size="24" fill="#8a97bd">Kode verifikasi (dicek admin di sistem)</text><text x="98" y="1058" font-size="34" font-weight="700" fill="#e8edfb">${esc(verifyCode)}</text><text x="70" y="1170" font-size="22" fill="#8a97bd">Gambar ini dibuat otomatis oleh server ZELVO dari data saldo asli.</text><text x="70" y="1205" font-size="22" fill="#8a97bd">Angka pada gambar yang diubah tidak akan cocok dengan kode verifikasi di database.</text></g></svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  const W = 1080, H = 1350;
+  const row = (k: string, v: string, big = false) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #1d2a54', padding: '20px 0' }}>
+      <div style={{ display: 'flex', fontSize: 28, color: '#8a97bd' }}>{k}</div>
+      <div style={{ display: 'flex', fontSize: big ? 40 : 30, fontWeight: 700, fontFamily: big ? 'Unbounded' : 'Jakarta', color: big ? '#6aa0ff' : '#e8edfb' }}>{v}</div>
+    </div>
+  );
+  const el = (
+    <div style={{ display: 'flex', flexDirection: 'column', width: W, height: H, background: '#05070d', color: '#e8edfb', fontFamily: 'Jakarta', padding: 70, position: 'relative', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', position: 'absolute', left: -200, top: 420, width: 1500, height: 500, flexDirection: 'column', transform: 'rotate(-24deg)', opacity: 0.07 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ display: 'flex', fontFamily: 'Unbounded', fontSize: 90, color: '#2d6bff', marginBottom: 30, marginLeft: i % 2 ? 160 : 0 }}>
+            ZELVO ZELVO ZELVO ZELVO
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Brand size={60} />
+          <div style={{ display: 'flex', fontSize: 26, color: '#8a97bd' }}>{host()}</div>
+        </div>
+        <div style={{ display: 'flex', fontFamily: 'Unbounded', fontSize: 40, marginTop: 50, lineHeight: 1.3 }}>Bukti saldo penarikan</div>
+        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 30 }}>
+          {row('Toko', seller.store_name || seller.display_name)}
+          {row('Username', '@' + seller.username)}
+          {row('Saldo yang ditarik', rupiah(w.amount), true)}
+          {row('Bank', w.bank_name)}
+          {row('No. rekening', maskAccount(w.account_number, 4))}
+          {row('Atas nama', w.account_name)}
+          {row('Kode pengajuan', w.code)}
+          {row('Dibuat', dateID(w.created_at, true))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', border: '2px solid #2d6bff', padding: '22px 28px' }}>
+          <div style={{ display: 'flex', fontSize: 24, color: '#8a97bd' }}>Kode verifikasi (dicek admin di sistem)</div>
+          <div style={{ display: 'flex', fontFamily: 'Unbounded', fontSize: 34, marginTop: 8 }}>{verifyCode}</div>
+        </div>
+        <div style={{ display: 'flex', fontSize: 22, color: '#8a97bd', marginTop: 22, lineHeight: 1.5 }}>
+          Gambar ini dibuat otomatis oleh server ZELVO dari data saldo asli. Angka pada gambar yang diubah tidak akan cocok dengan kode verifikasi di database.
+        </div>
+      </div>
+    </div>
+  );
+  return render(el, W, H);
 }

@@ -56,7 +56,7 @@ export default async function Home() {
         <ol className="grid gap-px border border-line bg-line md:grid-cols-3">
           {[
             ['Pilih template', 'Filter berdasarkan motor dan gaya. Preview ber-watermark supaya karya kreator tetap terlindungi.'],
-            ['Install atau beli', 'Login, lalu tekan install. Template berbayar dibayar lewat Midtrans (QRIS, VA, e-wallet, kartu).'],
+            ['Install atau beli', 'Template gratis bisa langsung di-install, cukup isi nama tanpa daftar. Template berbayar dibayar lewat Midtrans (QRIS, VA, e-wallet, kartu).'],
             ['Tempel di game', 'Kamu dapat PNG transparan 1024×1024 px, sesuai ketentuan game. Beri rating setelah dipakai.'],
           ].map(([t, d], i) => (
             <li key={t} className="bg-surface p-6">

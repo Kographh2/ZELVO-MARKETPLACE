@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Script from 'next/script';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Download, Star } from 'lucide-react';
 import { admin } from '@/lib/supabase/admin';
@@ -40,8 +41,19 @@ export default async function ProductPage({ params }: { params: { slug: string }
     hasAccess = p.price === 0 || !!ord || me.role === 'admin';
   }
 
+  // tamu (belum login) yang sudah install lewat nama: dikenali dari cookie browser
+  const guestToken = !me ? cookies().get('zelvo_guest')?.value : undefined;
+  let guestInstalled = false, guestMine: any = null;
+  if (guestToken) {
+    const [{ data: gi }, { data: gr }] = await Promise.all([
+      db.from('installs').select('id').eq('product_id', p.id).eq('guest_token', guestToken).maybeSingle(),
+      db.from('reviews').select('rating,comment').eq('product_id', p.id).eq('guest_token', guestToken).maybeSingle(),
+    ]);
+    guestInstalled = !!gi; guestMine = gr;
+  }
+
   const { data: reviewsRaw } = await db.from('reviews')
-    .select('id,user_id,rating,comment,image_path,created_at,user:profiles!user_id(display_name,username)')
+    .select('id,user_id,guest_name,rating,comment,image_path,created_at,user:profiles!user_id(display_name,username)')
     .eq('product_id', p.id).order('created_at', { ascending: false }).limit(50);
   const reviews = (reviewsRaw as any[]) || [];
   const mine = reviews.find((r) => r.user_id === me?.id) || null;
@@ -124,7 +136,8 @@ export default async function ProductPage({ params }: { params: { slug: string }
             </div>
             {me && !isOwner && (installed || mine) && <ReviewForm productId={p.id} existing={mine} />}
             {me && !isOwner && !installed && !mine && <p className="card p-4 text-sm text-muted">Install template ini dulu untuk bisa memberi rating.</p>}
-            {!me && <p className="card p-4 text-sm text-muted"><Link className="font-semibold text-accent" href={`/login?next=/p/${p.slug}`}>Masuk</Link> untuk memberi rating.</p>}
+            {!me && (guestInstalled || guestMine) && <ReviewForm productId={p.id} existing={guestMine} />}
+            {!me && !guestInstalled && !guestMine && <p className="card p-4 text-sm text-muted">Install template ini dulu (cukup isi nama) untuk bisa memberi rating.</p>}
           </div>
           <div className="space-y-3">
             {reviews.length === 0 && <div className="card border-dashed p-8 text-center text-sm text-muted">Belum ada rating. Jadilah yang pertama setelah install.</div>}
@@ -132,8 +145,8 @@ export default async function ProductPage({ params }: { params: { slug: string }
               <article key={r.id} className="card space-y-2 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface2 text-xs font-bold">{initials(r.user?.display_name)}</span>
-                    <div><p className="text-sm font-bold">{r.user?.display_name}</p><Stars value={r.rating} size={13} /></div>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface2 text-xs font-bold">{initials(r.user?.display_name || r.guest_name)}</span>
+                    <div><p className="text-sm font-bold">{r.user?.display_name || r.guest_name || 'Tamu'}{!r.user && <span className="ml-2 text-xs font-normal text-muted">tamu</span>}</p><Stars value={r.rating} size={13} /></div>
                   </div>
                   <time className="text-xs text-muted">{dateID(r.created_at)}</time>
                 </div>
